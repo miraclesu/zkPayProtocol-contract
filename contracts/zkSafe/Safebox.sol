@@ -14,6 +14,8 @@ contract Safebox is Context {
 
     PasswordService public pws;
 
+    event Deposit(address indexed sender, uint amount, uint balance);
+
     event WithdrawERC20(address indexed tokenAddr, uint amount);
 
     event WithdrawERC721(address indexed tokenAddr, uint tokenId);
@@ -63,6 +65,15 @@ contract Safebox is Context {
         address oldOwner = _owner;
         _owner = newOwner;
         emit OwnershipTransferred(oldOwner, newOwner);
+    }
+
+    receive() external payable {
+        emit Deposit(msg.sender, msg.value, address(this).balance);
+    }
+
+    // fix metamask
+    // Transaction reverted: function selector was not recognized and there's no fallback function
+    fallback() external payable {
     }
 
     function init(address newOwner) external {
