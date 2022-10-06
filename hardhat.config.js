@@ -1,15 +1,25 @@
+require('dotenv').config();
 require("@nomicfoundation/hardhat-toolbox");
+
+// Ensure that we have all the environment variables we need.
+const mnemonic = process.env.MNEMONIC;
+if (!mnemonic) {
+  throw new Error("Please set your MNEMONIC in a .env file");
+}
 
 /** @type import('hardhat/config').HardhatUserConfig */
 module.exports = {
   defaultNetwork: 'hardhat',
   networks: {
     hardhat: {
-
+      chainId: 1337,
+      accounts: {
+        mnemonic: mnemonic
+      }
     },
-    kovan: {
-      url: 'https://kovan.infura.io/v3/c7cd730e3f1e4f9a8c702c6cb9d17f3f',
-      chainId: 42,
+    localhost: {
+      url: 'http://127.0.0.1:8545',
+      chainId: 1337,
       from: process.env.ETH_ADDRESS_0,
       accounts: [
         process.env.ETH_PK_0,

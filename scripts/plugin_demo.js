@@ -10,6 +10,7 @@ var provider
 
 var passwordService
 var safeboxFactory
+var safebox
 var usdt
 var busd
 var wordsNFT
@@ -22,16 +23,16 @@ async function main() {
     // let privateKey = '0x0123456789012345678901234567890123456789012345678901234567890123'
     // let wallet = new ethers.Wallet(privateKey)
 
-    const url = 'https://stardust.metis.io/?owner=588'
+    const url = 'http://127.0.0.1:8545'
     provider = new ethers.providers.JsonRpcProvider(url)
     signer = provider.getSigner(0)
 
     //metis testnet
-    let passwordServiceAddr = '0x6009234967B1c7872de00BB3f3e77610b8D6dc9e'
-    let safeboxFactoryAddr = '0xa877a2247b318b40935E102926Ba5ff4F3b0E8b1'
-    let usdtAddr = '0x6D288698986A3b1C1286fB074c45Ac2F10409E28'
-    let busdAddr = '0x072777f02Ad827079F188D8175FB155b0e75343D'
-    let wordsNFTAddr = '0xCd327e2688b4aCF4219Fb8455bB3749303265761'
+    let passwordServiceAddr = '0xC03BaAf74c0b4560645630AaaD213fDc322942Eb'
+    let safeboxFactoryAddr = '0xb6692892F247aDE83f1Bf8419940c5c84A3d2786'
+    let usdtAddr = '0x18b43b3F80039F5b68c70c4C31D40156672B37A1'
+    let busdAddr = '0x1f3e564a52a504D7A1A707B234538d84B5DD0eCC'
+    let wordsNFTAddr = '0x096D03525994D147e1070E6719aecC24BF176C06'
 
     //init
     passwordService = new ethers.Contract(passwordServiceAddr, getAbi('../artifacts/contracts/pws/PasswordService.sol/PasswordService.json'), provider)
@@ -41,15 +42,18 @@ async function main() {
     wordsNFT = new ethers.Contract(wordsNFTAddr, getAbi('../artifacts/contracts/mock/MockERC721.sol/MockERC721.json'), provider)
 
     await home()
+    safebox = new ethers.Contract(safeboxAddr, getAbi('../artifacts/contracts/zkSafe/Safebox.sol/Safebox.json'), provider)
+    // await safeboxFactory.connect(signer).createSafebox()
+    // await setPassword()
+    // await withdrawETH()
     await myToken()
-    await myNFT()
-    await importToken()
-    await importNFT()
+    // await myNFT()
+    // await importToken()
+    // await importNFT()
 }
 
-
 async function home() {
-    userAddr = '0xE44081Ee2D0D4cbaCd10b44e769A14Def065eD4D' //input wallet address
+    userAddr = '0x5300d5c66A2FB8A0cf4c12a24Eaff75755127FE3' //input wallet address
 
     safeboxAddr = await safeboxFactory.getSafeboxAddr(userAddr)
     let existSafeboxAddr = await safeboxFactory.userToSafebox(userAddr)
@@ -72,7 +76,7 @@ async function myToken() {
 
 
 async function myNFT() {
-    for (let i=1; i<=3; i++) {
+    for (let i=1; i<=2; i++) {
         let nftOwner = await wordsNFT.ownerOf(i)
         if (userAddr == nftOwner) {
             console.log('in wallet WordsNFT:', 'Words#' + i)
@@ -128,6 +132,20 @@ async function setPassword() {
     let zkhash = await passwordService.zkhashOf(userAddr)
 
     if (s(zkhash) == '0') {
+        let proof = [
+            BigNumber.from(0).toHexString(),
+            BigNumber.from(0).toHexString(),
+            BigNumber.from(0).toHexString(),
+            BigNumber.from(0).toHexString(),
+            BigNumber.from(0).toHexString(),
+            BigNumber.from(0).toHexString(),
+            BigNumber.from(0).toHexString(),
+            BigNumber.from(0).toHexString()
+        ]
+        await passwordService.connect(signer)
+            .resetPassword(proof, 0, 0,
+                zkp.proof, zkp.zkhash, zkp.expiration, zkp.allhash,
+                {value: ethers.utils.parseEther('0.1')})
         return zkp //Verification OK
     } else {
         return null //Verification Fail
@@ -210,14 +228,15 @@ async function withdrawERC721() {
 // 从保险箱提nft到钱包，弹出插件让用户输入密码, 密码正确返回ZKP，错误返回null
 async function withdrawETH() {
     let psw = '123abc' //input onChain password
-    let amount = s(m(1, 18)) //input Metis amount
+    let amount = m(1, 18) //input Metis amount
 
-    let datahash = utils.solidityKeccak256(['uint256'], [amount]);
+    let datahash = utils.solidityKeccak256(['uint256'], [s(amount)]);
     datahash = s(b(datahash).div(100)) //must be 254b, not 256b
     let zkp = await getProof(psw, userAddr, datahash)
     let zkhash = await passwordService.zkhashOf(userAddr)
 
     if (s(zkhash) == zkp.zkhash) {
+        await safebox.connect(signer).withdrawETH(zkp.proof, amount, zkp.expiration, zkp.allhash)
         return zkp //Verification OK
     } else {
         return null //Verification Fail
@@ -257,7 +276,7 @@ async function getProof(psw, user, datahash) {
             BigNumber.from(data.proof.pi_c[1]).toHexString()
         ]
 
-        console.log('ZKP:', {proof, zkhash, expiration, allhash})
+        // console.log('ZKP:', {proof, zkhash, expiration, allhash})
         return {proof, zkhash, expiration, allhash}
 
     } else {
