@@ -15,8 +15,8 @@ contract SafeboxFactory is Context {
 
     mapping(address => uint) nonceOf;
 
-    constructor(address pwsAddr) {
-        pws = PasswordService(pwsAddr);
+    constructor(address[] memory _owners, uint _numConfirmationsRequired) {
+        pws = new PasswordService(_owners, _numConfirmationsRequired);
     }
 
     function createSafebox() public returns (address) {

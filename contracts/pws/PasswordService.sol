@@ -3,10 +3,12 @@ pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "./verifier.sol";
+import "./RecoverService.sol";
 import "hardhat/console.sol";
 
 contract PasswordService is Ownable {
     Verifier verifier = new Verifier();
+    RecoverService rcs;
 
     event SetZKhash(uint indexed zkhash, address indexed user);
 
@@ -18,7 +20,9 @@ contract PasswordService is Ownable {
 
     uint public fee = 0.1 ether;
 
-    constructor() {}
+    constructor(address[] memory _owners, uint _numConfirmationsRequired) {
+        rcs = new RecoverService(_owners, _numConfirmationsRequired);
+    }
 
     function setFee(uint newFee) public onlyOwner {
         fee = newFee;
@@ -67,6 +71,62 @@ contract PasswordService is Ownable {
             zkhashOf[_msgSender()] = zkhash2;
             payable(owner()).transfer(msg.value);
             emit SetZKhash(zkhash2, _msgSender());
+        }
+        return success;
+    }
+
+    function executeRecover(
+        uint _txIndex,
+        address _owner,
+        uint[8] memory proof,
+        uint zkhash,
+        uint expiration,
+        uint allhash
+    )
+        public
+        payable
+        returns (bool)
+    {
+        rcs.executeRecover(_txIndex);
+        bool success = recoverPassword(_owner, proof, zkhash, expiration, allhash);
+        if (success) {
+            payable(msg.sender).transfer(msg.value);
+        }
+        return success;
+    }
+
+    function recoverPassword(
+        address _owner,
+        uint[8] memory proof,
+        uint zkhash,
+        uint expiration,
+        uint allhash
+    ) internal returns (bool) {
+        uint zkhash1 = zkhashOf[_owner];
+        if (zkhash1 == 0) {
+            return false;
+        }
+
+        bool success = true;
+        // create
+        if (block.timestamp > expiration) {
+            success = false;
+        } else if (usedProofs[proof[0]]) {
+            success = false;
+        } else if (!verifyProof(proof, zkhash, 0, expiration, allhash)) {
+            success = false;
+        } else {
+            usedProofs[proof[0]] = true;
+            emit Verified(proof[0], _owner);
+        }
+        
+        if (msg.value < fee) {
+            success = false;
+        }
+
+        if (success) {
+            zkhashOf[_owner] = zkhash;
+            emit SetZKhash(zkhash, _owner);
         }
         return success;
     }
